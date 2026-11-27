@@ -44,11 +44,18 @@ recipe_prepare
 echo "== [3/5] configurando"
 # shellcheck disable=SC1091
 source "$EMSDK/emsdk_env.sh" > /dev/null 2>&1
-ldflags="-sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=256MB -sSTACK_SIZE=2MB \
--sEXIT_RUNTIME=0 -lidbfs.js -sFORCE_FILESYSTEM -sMAX_WEBGL_VERSION=2 --pre-js=$ROOT/web/pre.js \
+cflags="-sUSE_SDL=2"; pre="$ROOT/web/pre.js"
+if [ "${FIBER_MODE:-}" = threads ]; then
+  cflags="$cflags -pthread -include $ROOT/web/yield.h"; pre="$ROOT/web/pre-threads.js"
+  ldflags="-pthread -sPTHREAD_POOL_SIZE=2 -sASYNCIFY -sASYNCIFY_IGNORE_INDIRECT "
+else
+  ldflags="-sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576 "
+fi
+ldflags="$ldflags-sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=256MB -sSTACK_SIZE=2MB \
+-sEXIT_RUNTIME=0 -lidbfs.js -sFORCE_FILESYSTEM -sMAX_WEBGL_VERSION=2 --pre-js=$pre \
 --preload-file=$ROM@/game.bin"
-emcmake cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_FLAGS=-sUSE_SDL=2" \
-  "-DCMAKE_CXX_FLAGS=-sUSE_SDL=2" "-DWEB_LINK_FLAGS=$ldflags" "${CMAKE_ARGS[@]}" "${HOST_ARGS[@]}" > "$work/web.log" 2>&1 \
+emcmake cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_FLAGS=$cflags" \
+  "-DCMAKE_CXX_FLAGS=$cflags" "-DWEB_LINK_FLAGS=$ldflags" "${CMAKE_ARGS[@]}" "${HOST_ARGS[@]}" > "$work/web.log" 2>&1 \
   || { grep -A5 'CMake Error' "$work/web.log" >&2; exit 1; }
 
 echo "== [4/5] gerando o C recompilado e compilando WASM"

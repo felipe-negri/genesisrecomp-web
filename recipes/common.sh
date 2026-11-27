@@ -10,7 +10,13 @@ endif()
 web_engine_edits() {
   local eng="$1"
   # o jogo roda numa fibra: no navegador, fibras do Emscripten (Asyncify) no lugar do minicoro
-  cp "$ROOT/web/fiber_web.inc" "$eng/runner/fiber_web.inc"
+  # FIBER_MODE=threads (receita): cada fibra é uma thread do navegador e o Asyncify fica fora do código
+  # recompilado (WASM bem menor; a página precisa de COOP/COEP). Padrão: fibras do Emscripten (Asyncify completo).
+  if [ "${FIBER_MODE:-}" = threads ]; then
+    cp "$ROOT/web/fiber_web_threads.inc" "$eng/runner/fiber_web.inc"
+  else
+    cp "$ROOT/web/fiber_web.inc" "$eng/runner/fiber_web.inc"
+  fi
   python3 "$ROOT/recipes/edit.py" "$eng/runner/fiber_compat.c" \
     --replace '#include "fiber_compat.h"\n' '#include "fiber_compat.h"\n#ifdef __EMSCRIPTEN__\n#include "fiber_web.inc"\n#else\n' \
     --append '\n#endif /* __EMSCRIPTEN__ */\n'

@@ -1,4 +1,4 @@
-# sha1 da ROM (.md/.bin sem intercalação)	receita	jogo
-6ddb7de1e17e7f6cdb88927bd906352030daa194	sonic1	Sonic the Hedgehog (USA, Europe)
-8bca5dcef1af3e00098666fd892dc1c2a76333f9	sonic2	Sonic the Hedgehog 2 (World)
-49634bb09c38fa03549577f977e6afb6cebaac48	rka	Rocket Knight Adventures (USA)
+2 matches in 1 files:
+
+games.tsv:5:75e9c4705259d84112b3e697a6c00a0813d47d71	sonic3	Sonic the Hedgehog 3 (USA)
+games.tsv:6:88d6499d874dcb5721ff58d76fe1b9af811192e3	sandk	Sonic & Knuckles (World)
