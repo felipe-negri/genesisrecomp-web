@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Contrato "web-recomp" do Recompendium: scripts/port.sh <nome> <rom.md|rom.bin>
+# Gera a página em build/web-<nome>/ (index.html + .js/.wasm/.data).
+# Cada jogo do Genesis Recomp tem config própria, então só entram os jogos de games.tsv,
+# reconhecidos pelo SHA-1 da ROM; cada um usa o port publicado do jogo, numa versão pinada.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+name="$1"; ROM="$(realpath "$2")"
+EMSDK="${EMSDK:-$ROOT/tools/emsdk}"
+work="$ROOT/games/$name"; out="$ROOT/build/web-$name"
+
+echo "== [1/5] identificando a ROM"
+sha=$(sha1sum "$ROM" | cut -c1-40)
+recipe=$(awk -F'\t' -v s="$sha" '$1==s {print $2}' "$ROOT/games.tsv")
+if [ -z "$recipe" ]; then
+  echo "erro: jogo não suportado (SHA-1 $sha). Suportados:" >&2
+  grep -v '^#' "$ROOT/games.tsv" | cut -f3 | sed 's/^/  - /' >&2
+  exit 2
+fi
+# shellcheck disable=SC1091
+source "$ROOT/recipes/common.sh"
+# shellcheck disable=SC1090
+source "$ROOT/recipes/$recipe.sh"
+WEB_TARGET_HOOK="${WEB_TARGET_HOOK//\$\{WEB_TARGET\}/$EXE}"
+echo "   $recipe ($REPO @ ${COMMIT:0:7})"
+
+echo "== [2/5] baixando o port"
+src="$ROOT/games/.src/$recipe-$COMMIT"
+if [ ! -d "$src/.git" ]; then
+  rm -rf "$src"; mkdir -p "$src"
+  git -C "$src" init -q
+  git -C "$src" remote add origin "$REPO"   # submódulos com URL relativa resolvem contra ele
+  git -C "$src" fetch -q --depth 1 origin "$COMMIT"
+  git -C "$src" checkout -q FETCH_HEAD
+  git -C "$src" submodule update -q --init --recursive
+fi
+rm -rf "$work"; mkdir -p "$work"
+cp "$ROM" "$work/game.bin"; ROM="$work/game.bin"   # caminho sem espaços p/ os flags de link
+cp -a "$src" "$work/src"
+cd "$work/src"
+recipe_prepare
+
+echo "== [3/5] configurando"
+# shellcheck disable=SC1091
+source "$EMSDK/emsdk_env.sh" > /dev/null 2>&1
+ldflags="-sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=128MB -sSTACK_SIZE=2MB \
+-sEXIT_RUNTIME=0 -lidbfs.js -sFORCE_FILESYSTEM -sMAX_WEBGL_VERSION=2 --pre-js=$ROOT/web/pre.js \
+--preload-file=$ROM@/game.bin"
+emcmake cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_FLAGS=-sUSE_SDL=2" \
+  "-DCMAKE_CXX_FLAGS=-sUSE_SDL=2" "-DWEB_LINK_FLAGS=$ldflags" "${CMAKE_ARGS[@]}" > "$work/web.log" 2>&1 \
+  || { grep -A5 'CMake Error' "$work/web.log" >&2; exit 1; }
+
+echo "== [4/5] gerando o C recompilado e compilando WASM"
+ninja -C build "$EXE" >> "$work/web.log" 2>&1 || { grep -m5 -E 'error|FAILED' "$work/web.log" >&2; exit 1; }
+
+echo "== [5/5] publicando"
+rm -rf "$out"; mkdir -p "$out"
+cp "build/$EXE.js" "build/$EXE.wasm" "build/$EXE.data" "$out/"
+sed "s|{{{ SCRIPT }}}|<script async src=\"$EXE.js\"></script>|" "$ROOT/web/shell.html" > "$out/index.html"
+cd "$ROOT"; rm -rf "$work/src"   # o port com o C gerado é grande e sai de novo a cada build
