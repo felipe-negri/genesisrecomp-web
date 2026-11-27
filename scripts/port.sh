@@ -38,16 +38,17 @@ rm -rf "$work"; mkdir -p "$work"
 cp "$ROM" "$work/game.bin"; ROM="$work/game.bin"   # caminho sem espaços p/ os flags de link
 cp -a "$src" "$work/src"
 cd "$work/src"
+HOST_ARGS=()
 recipe_prepare
 
 echo "== [3/5] configurando"
 # shellcheck disable=SC1091
 source "$EMSDK/emsdk_env.sh" > /dev/null 2>&1
-ldflags="-sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=128MB -sSTACK_SIZE=2MB \
+ldflags="-sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576 -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=256MB -sSTACK_SIZE=2MB \
 -sEXIT_RUNTIME=0 -lidbfs.js -sFORCE_FILESYSTEM -sMAX_WEBGL_VERSION=2 --pre-js=$ROOT/web/pre.js \
 --preload-file=$ROM@/game.bin"
 emcmake cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_FLAGS=-sUSE_SDL=2" \
-  "-DCMAKE_CXX_FLAGS=-sUSE_SDL=2" "-DWEB_LINK_FLAGS=$ldflags" "${CMAKE_ARGS[@]}" > "$work/web.log" 2>&1 \
+  "-DCMAKE_CXX_FLAGS=-sUSE_SDL=2" "-DWEB_LINK_FLAGS=$ldflags" "${CMAKE_ARGS[@]}" "${HOST_ARGS[@]}" > "$work/web.log" 2>&1 \
   || { grep -A5 'CMake Error' "$work/web.log" >&2; exit 1; }
 
 echo "== [4/5] gerando o C recompilado e compilando WASM"

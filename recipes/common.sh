@@ -14,7 +14,15 @@ web_engine_edits() {
   python3 "$ROOT/recipes/edit.py" "$eng/runner/fiber_compat.c" \
     --replace '#include "fiber_compat.h"\n' '#include "fiber_compat.h"\n#ifdef __EMSCRIPTEN__\n#include "fiber_web.inc"\n#else\n' \
     --append '\n#endif /* __EMSCRIPTEN__ */\n'
-  # o gerador (GenesisRecomp) é compilado junto: num build web ele roda no node, com acesso ao disco
+  # o gerador (GenesisRecomp) tem que rodar na máquina do build
+  if grep -q GENESIS_RECOMPILER_EXE "$eng/cmake/GenesisRecompGenerated.cmake"; then
+    # motor novo: aceita um gerador nativo pronto
+    cmake -S "$eng/recompiler" -B "$work/host" -DCMAKE_BUILD_TYPE=Release > "$work/host.log" 2>&1
+    cmake --build "$work/host" --parallel >> "$work/host.log" 2>&1
+    HOST_ARGS=("-DGENESIS_RECOMPILER_EXE=$work/host/GenesisRecomp")
+    return
+  fi
+  # motor antigo: o gerador é compilado junto e, num build web, roda no node com acesso ao disco
   python3 "$ROOT/recipes/edit.py" "$eng/cmake/GenesisRecompGenerated.cmake" \
     --replace '        COMMAND "$<TARGET_FILE:GenesisRecomp>" ${_recompiler_args}\n' '        COMMAND GenesisRecomp ${_recompiler_args}\n' \
     --replace '                     "${CMAKE_BINARY_DIR}/genesis-recompiler")\nendif()' \
