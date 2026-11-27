@@ -54,6 +54,14 @@ emcmake cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_FLAGS
 echo "== [4/5] gerando o C recompilado e compilando WASM"
 ninja -C build "$EXE" >> "$work/web.log" 2>&1 || { grep -m5 -E 'error|FAILED' "$work/web.log" >&2; exit 1; }
 
+# WebAssembly não perdoa chamada sem protótipo: o wasm-ld troca a função por uma armadilha
+# (ALLOWED_MISMATCH na receita lista as que foram conferidas e não fazem mal)
+bad=$(grep -o 'function signature mismatch: [A-Za-z0-9_]*' "$work/web.log" | awk '{print $4}' | sort -u \
+      | grep -vxF -f <(tr ' ' '\n' <<< "${ALLOWED_MISMATCH:-}") || true)
+if [ -n "$bad" ]; then
+  echo "erro: funções chamadas com assinatura errada (o jogo travaria no navegador): $bad" >&2; exit 1
+fi
+
 echo "== [5/5] publicando"
 rm -rf "$out"; mkdir -p "$out"
 cp "build/$EXE.js" "build/$EXE.wasm" "build/$EXE.data" "$out/"
